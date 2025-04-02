@@ -96,10 +96,30 @@ export default function ResumeAnalysis() {
       // After analysis, find job matches
       findJobMatches(textForm.getValues().resumeText);
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Handle API quota exceeded errors
+      if (error.response?.data?.error === 'api_quota_exceeded') {
+        toast({
+          title: "API Quota Exceeded",
+          description: "The OpenAI API quota has been exceeded. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Handle API key errors
+      if (error.response?.data?.error === 'api_key_error') {
+        toast({
+          title: "API Key Error",
+          description: "The OpenAI API key is missing or invalid. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       toast({
         title: "Error analyzing resume",
-        description: error.message || "There was an error analyzing your resume",
+        description: error.response?.data?.message || error.message || "There was an error analyzing your resume",
         variant: "destructive",
       });
     },
@@ -117,10 +137,30 @@ export default function ResumeAnalysis() {
     onSuccess: (response) => {
       setJobMatches(response.data);
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Handle API quota exceeded errors
+      if (error.response?.data?.error === 'api_quota_exceeded') {
+        toast({
+          title: "API Quota Exceeded",
+          description: "The OpenAI API quota has been exceeded. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Handle API key errors
+      if (error.response?.data?.error === 'api_key_error') {
+        toast({
+          title: "API Key Error",
+          description: "The OpenAI API key is missing or invalid. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       toast({
         title: "Error finding job matches",
-        description: error.message || "There was an error finding job matches",
+        description: error.response?.data?.message || error.message || "There was an error finding job matches",
         variant: "destructive",
       });
     },
@@ -145,10 +185,40 @@ export default function ResumeAnalysis() {
       // After analysis, find job matches
       findJobMatches(response.data.resumeText);
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Handle API quota exceeded errors
+      if (error.response?.data?.error === 'api_quota_exceeded') {
+        toast({
+          title: "API Quota Exceeded",
+          description: "The OpenAI API quota has been exceeded. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Handle API key errors
+      if (error.response?.data?.error === 'api_key_error') {
+        toast({
+          title: "API Key Error",
+          description: "The OpenAI API key is missing or invalid. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Handle no file provided error
+      if (error.response?.status === 400) {
+        toast({
+          title: "File Upload Error",
+          description: error.response?.data?.message || "Please make sure you've selected a valid resume file.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       toast({
         title: "Error uploading resume",
-        description: error.message || "There was an error uploading your resume",
+        description: error.response?.data?.message || error.message || "There was an error uploading your resume",
         variant: "destructive",
       });
     },
@@ -189,7 +259,22 @@ export default function ResumeAnalysis() {
       <Header />
       <main className="flex-grow pt-20">
         <div className="container mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold mb-6">Resume Analysis</h1>
+          <h1 className="text-3xl font-bold mb-2">Resume Analysis</h1>
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.75.75 0 00.736-.676L10.95 4.674A.75.75 0 0011.6 4h.003a.75.75 0 00.74.876l.012-.006a.75.75 0 00.564-.41 8.001 8.001 0 016.173 7.245.75.75 0 01-.694.805l-.003.002-.01 1.505a.75.75 0 01-.719.674h-.282a.75.75 0 01-.707-.57 6.7 6.7 0 00-2.257-3.066.75.75 0 01-.275-.725v-.001a.75.75 0 01.243-.41A6.5 6.5 0 0013.5 7.25a.75.75 0 01-.75.75h-.5a.75.75 0 01-.75-.75v-.5a.75.75 0 01.75-.75h1.376a.75.75 0 00.57-1.25A7.969 7.969 0 009 4zm.75 10.25a.75.75 0 01.75-.75h.5a.75.75 0 01.75.75v.5a.75.75 0 01-.75.75h-.5a.75.75 0 01-.75-.75v-.5z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">OpenAI API Usage</h3>
+                <div className="mt-1 text-sm text-blue-700">
+                  <p>This feature uses the OpenAI API to analyze your resume. If you encounter an error related to API quota limits, please try again later.</p>
+                </div>
+              </div>
+            </div>
+          </div>
           
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
             <TabsList className="grid w-full grid-cols-2 mb-4">

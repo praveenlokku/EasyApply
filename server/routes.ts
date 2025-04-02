@@ -78,8 +78,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error analyzing resume:", error);
+      
+      // Check for OpenAI API quota errors
+      if (error.message && error.message.includes("quota")) {
+        return res.status(429).json({ 
+          message: "OpenAI API quota exceeded. Please try again later or check your API key limits.",
+          error: "api_quota_exceeded"
+        });
+      }
+      
+      // Check for OpenAI API key errors
+      if (error.message && error.message.includes("API key")) {
+        return res.status(401).json({
+          message: "OpenAI API key is missing or invalid. Please configure it properly.",
+          error: "api_key_error"
+        });
+      }
+      
       return res.status(500).json({ 
-        message: "An error occurred while analyzing the resume" 
+        message: "An error occurred while analyzing the resume",
+        error: error.message || "Unknown error"
       });
     }
   });
@@ -108,8 +126,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error finding job matches:", error);
+      
+      // Check for OpenAI API quota errors
+      if (error.message && error.message.includes("quota")) {
+        return res.status(429).json({ 
+          message: "OpenAI API quota exceeded. Please try again later or check your API key limits.",
+          error: "api_quota_exceeded"
+        });
+      }
+      
+      // Check for OpenAI API key errors
+      if (error.message && error.message.includes("API key")) {
+        return res.status(401).json({
+          message: "OpenAI API key is missing or invalid. Please configure it properly.",
+          error: "api_key_error"
+        });
+      }
+      
       return res.status(500).json({ 
-        message: "An error occurred while finding job matches" 
+        message: "An error occurred while finding job matches",
+        error: error.message || "Unknown error"
       });
     }
   });
@@ -158,15 +194,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error uploading and analyzing resume:", error);
       
-      // Check for specific API key errors for better error messaging
+      // Check for OpenAI API quota errors
+      if (error.message && error.message.includes("quota")) {
+        return res.status(429).json({ 
+          message: "OpenAI API quota exceeded. Please try again later or check your API key limits.",
+          error: "api_quota_exceeded"
+        });
+      }
+      
+      // Check for OpenAI API key errors
       if (error.message && error.message.includes("API key")) {
-        return res.status(500).json({
-          message: "OpenAI API key is missing or invalid. Please configure it properly."
+        return res.status(401).json({
+          message: "OpenAI API key is missing or invalid. Please configure it properly.",
+          error: "api_key_error"
+        });
+      }
+      
+      // Check for no file provided error
+      if (error.message && error.message.includes("No resume file provided")) {
+        return res.status(400).json({
+          message: "Please upload a resume file to analyze."
         });
       }
       
       return res.status(500).json({ 
-        message: "An error occurred while processing the resume" 
+        message: "An error occurred while processing the resume",
+        error: error.message || "Unknown error"
       });
     }
   });
