@@ -28,15 +28,19 @@ const HowItWorksSection = forwardRef<HTMLElement, {}>((_props, ref) => {
     setProcessingSteps(prev => prev.map(step => ({ ...step, completed: false })));
     
     // Simulate processing steps with delays
-    let step = 0;
+    let currentStep = 0;
+    const totalSteps = processingSteps.length;
+    
     const interval = setInterval(() => {
-      if (step < processingSteps.length) {
+      if (currentStep < totalSteps) {
         setProcessingSteps(prev => {
           const newSteps = [...prev];
-          newSteps[step].completed = true;
+          if (newSteps[currentStep]) {
+            newSteps[currentStep].completed = true;
+          }
           return newSteps;
         });
-        step++;
+        currentStep++;
       } else {
         clearInterval(interval);
         

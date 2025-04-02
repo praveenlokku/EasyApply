@@ -33,7 +33,7 @@ const WaitlistSection = forwardRef<HTMLElement, {}>((_props, ref) => {
     defaultValues: {
       name: "",
       email: "",
-      profession: "",
+      profession: "", // This must match the defaultValue on the select element
       terms: false
     }
   });
@@ -86,20 +86,25 @@ const WaitlistSection = forwardRef<HTMLElement, {}>((_props, ref) => {
                   
                   <div>
                     <Label htmlFor="profession">Current Profession</Label>
-                    <select
-                      id="profession"
-                      {...form.register("profession")}
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors mt-1"
-                    >
-                      <option value="" disabled selected>Select your profession</option>
-                      <option value="software">Software Development</option>
-                      <option value="design">Design</option>
-                      <option value="marketing">Marketing</option>
-                      <option value="finance">Finance</option>
-                      <option value="healthcare">Healthcare</option>
-                      <option value="education">Education</option>
-                      <option value="other">Other</option>
-                    </select>
+                    <div className="mt-1">
+                      <Select
+                        onValueChange={(value) => form.setValue("profession", value)}
+                        defaultValue={form.watch("profession")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your profession" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="software">Software Development</SelectItem>
+                          <SelectItem value="design">Design</SelectItem>
+                          <SelectItem value="marketing">Marketing</SelectItem>
+                          <SelectItem value="finance">Finance</SelectItem>
+                          <SelectItem value="healthcare">Healthcare</SelectItem>
+                          <SelectItem value="education">Education</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     {form.formState.errors.profession && (
                       <p className="text-red-500 text-sm mt-1">{form.formState.errors.profession.message}</p>
                     )}
