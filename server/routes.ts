@@ -10,7 +10,7 @@ import {
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
-import { analyzeResume, findJobMatches, extractTextFromResume } from "./services/openai";
+import { analyzeResume, findJobMatches, extractTextFromResume, checkOpenAIAPIStatus } from "./services/openai";
 
 // Setup multer for file uploads
 const upload = multer({
@@ -21,6 +21,23 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // API endpoint to check OpenAI API status
+  app.get("/api/openai/status", async (req, res) => {
+    try {
+      const apiStatus = await checkOpenAIAPIStatus();
+      
+      return res.status(apiStatus.isValid ? 200 : 403).json({
+        status: apiStatus.isValid ? "active" : "inactive",
+        message: apiStatus.message
+      });
+    } catch (error: any) {
+      console.error("Error checking OpenAI API status:", error);
+      return res.status(500).json({ 
+        status: "error",
+        message: "Failed to check OpenAI API status"
+      });
+    }
+  });
   // API endpoint for adding to waitlist
   app.post("/api/waitlist", async (req, res) => {
     try {

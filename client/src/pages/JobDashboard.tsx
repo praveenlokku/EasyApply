@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -26,7 +26,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Briefcase, PlusCircle, Calendar, MapPin, DollarSign, ExternalLink, Clock } from "lucide-react";
+import { Loader2, Briefcase, PlusCircle, Calendar, MapPin, DollarSign, ExternalLink, Clock, CheckCircle, AlertCircle } from "lucide-react";
+
+// API status response type
+type ApiStatusResponse = {
+  status: "active" | "inactive";
+  message: string;
+};
 
 // Form schema for job description
 const jobFormSchema = z.object({
@@ -48,6 +54,32 @@ export default function JobDashboard() {
   const { toast } = useToast();
   const [activeJob, setActiveJob] = useState<JobDescription | null>(null);
   const [openJobDialog, setOpenJobDialog] = useState(false);
+  const [apiStatus, setApiStatus] = useState<"active" | "inactive" | "checking" | "error">("checking");
+  
+  // Query for API status
+  const apiStatusQuery = useQuery({
+    queryKey: ['/api/openai/status'],
+    queryFn: async () => {
+      return apiRequest<ApiStatusResponse>('/api/openai/status');
+    },
+    refetchInterval: 60000, // Check every minute
+  });
+  
+  // Update API status when query completes
+  useEffect(() => {
+    if (apiStatusQuery.isSuccess) {
+      setApiStatus(apiStatusQuery.data.status);
+      if (apiStatusQuery.data.status === "inactive") {
+        toast({
+          title: "API Service Limited",
+          description: "The OpenAI API quota has been exceeded. Some features may be unavailable.",
+          variant: "destructive",
+        });
+      }
+    } else if (apiStatusQuery.isError) {
+      setApiStatus("error");
+    }
+  }, [apiStatusQuery.data, apiStatusQuery.isSuccess, apiStatusQuery.isError, toast]);
 
   // Form for job description
   const jobForm = useForm<JobFormValues>({
@@ -140,156 +172,196 @@ export default function JobDashboard() {
       <Header />
       <main className="flex-grow pt-20">
         <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-3xl font-bold">Job Dashboard</h1>
-              <p className="text-gray-600">
-                Manage your job applications and saved positions
-              </p>
+          {/* Header Section */}
+          <div className="flex flex-col mb-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold">Job Dashboard</h1>
+                <p className="text-gray-600">
+                  Manage your job applications and saved positions
+                </p>
+              </div>
+              
+              <Dialog open={openJobDialog} onOpenChange={setOpenJobDialog}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add New Job
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Job</DialogTitle>
+                    <DialogDescription>
+                      Enter the details of the job you want to save or apply to.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <Form {...jobForm}>
+                    <form onSubmit={jobForm.handleSubmit(onJobSubmit)} className="space-y-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField
+                          control={jobForm.control}
+                          name="title"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Job Title</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. Frontend Developer" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={jobForm.control}
+                          name="company"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Company</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. Acme Inc." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <FormField
+                        control={jobForm.control}
+                        name="description"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Job Description</FormLabel>
+                            <FormControl>
+                              <Textarea 
+                                placeholder="Enter the job description..." 
+                                className="min-h-[150px]" 
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField
+                          control={jobForm.control}
+                          name="location"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Location</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. New York, NY (Optional)" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={jobForm.control}
+                          name="salary"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Salary Range</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. $80,000 - $100,000 (Optional)" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField
+                          control={jobForm.control}
+                          name="postedDate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Posted Date</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={jobForm.control}
+                          name="url"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Job URL</FormLabel>
+                              <FormControl>
+                                <Input placeholder="https://example.com/jobs/123 (Optional)" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setOpenJobDialog(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={saveJobMutation.isPending}>
+                          {saveJobMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>Save Job</>
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
             </div>
-            <Dialog open={openJobDialog} onOpenChange={setOpenJobDialog}>
-              <DialogTrigger asChild>
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add New Job
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Job</DialogTitle>
-                  <DialogDescription>
-                    Enter the details of the job you want to save or apply to.
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <Form {...jobForm}>
-                  <form onSubmit={jobForm.handleSubmit(onJobSubmit)} className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <FormField
-                        control={jobForm.control}
-                        name="title"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Job Title</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. Frontend Developer" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={jobForm.control}
-                        name="company"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Company</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. Acme Inc." {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
-                    <FormField
-                      control={jobForm.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Job Description</FormLabel>
-                          <FormControl>
-                            <Textarea 
-                              placeholder="Enter the job description..." 
-                              className="min-h-[150px]" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <FormField
-                        control={jobForm.control}
-                        name="location"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Location</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. New York, NY (Optional)" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={jobForm.control}
-                        name="salary"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Salary Range</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. $80,000 - $100,000 (Optional)" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <FormField
-                        control={jobForm.control}
-                        name="postedDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Posted Date</FormLabel>
-                            <FormControl>
-                              <Input type="date" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={jobForm.control}
-                        name="url"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Job URL</FormLabel>
-                            <FormControl>
-                              <Input placeholder="https://example.com/jobs/123 (Optional)" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
-                    <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setOpenJobDialog(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={saveJobMutation.isPending}>
-                        {saveJobMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>Save Job</>
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            
+            {/* API Status Indicator */}
+            <div className={`border rounded-md p-3 ${
+              apiStatus === "active" ? "bg-green-50 border-green-200" : 
+              apiStatus === "inactive" ? "bg-red-50 border-red-200" : 
+              apiStatus === "checking" ? "bg-blue-50 border-blue-200" : 
+              "bg-yellow-50 border-yellow-200"
+            }`}>
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  {apiStatus === "active" && (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  )}
+                  {apiStatus === "inactive" && (
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                  )}
+                  {apiStatus === "checking" && (
+                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                  )}
+                  {apiStatus === "error" && (
+                    <AlertCircle className="h-5 w-5 text-yellow-500" />
+                  )}
+                </div>
+                <div className="ml-3">
+                  <h3 className={`text-sm font-medium ${
+                    apiStatus === "active" ? "text-green-800" : 
+                    apiStatus === "inactive" ? "text-red-800" : 
+                    apiStatus === "checking" ? "text-blue-800" : 
+                    "text-yellow-800"
+                  }`}>
+                    AI Service: {apiStatus === "checking" ? "Checking..." : apiStatus.charAt(0).toUpperCase() + apiStatus.slice(1)}
+                  </h3>
+                </div>
+              </div>
+            </div>
           </div>
 
+          {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-5 space-y-4">
               <Card>

@@ -1,8 +1,48 @@
 import OpenAI from "openai";
 import { ResumeAnalysisResult, JobMatch } from "../../client/src/lib/utils/resume-parser";
 
-// Initialize the OpenAI client
+// Initialize the OpenAI client with API key from environment variables
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Helper function to check if API key is valid and has quota
+export async function checkOpenAIAPIStatus(): Promise<{isValid: boolean, message: string}> {
+  try {
+    // Making a minimal API call to check status
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo", // Using less expensive model for the check
+      messages: [
+        { role: "user", content: "Hello" }
+      ],
+      max_tokens: 5
+    });
+    
+    return { 
+      isValid: true, 
+      message: "OpenAI API is working properly" 
+    };
+  } catch (error: any) {
+    console.error("OpenAI API status check failed:", error.message);
+    
+    if (error.message.includes("quota") || error.code === "insufficient_quota") {
+      return {
+        isValid: false,
+        message: "OpenAI API quota exceeded. Please add a new API key or upgrade your plan."
+      };
+    }
+    
+    if (error.message.includes("API key")) {
+      return {
+        isValid: false,
+        message: "Invalid OpenAI API key. Please check your API key configuration."
+      };
+    }
+    
+    return {
+      isValid: false,
+      message: `OpenAI API error: ${error.message}`
+    };
+  }
+}
 
 /**
  * Analyze a resume against job requirements
