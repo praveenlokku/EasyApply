@@ -23,9 +23,10 @@ let isGeminiAvailable = true;
  * @returns Cleaned content with only valid JSON
  */
 function cleanGeminiResponse(content: string): string {
-  // Remove markdown code blocks
-  let cleaned = content.replace(/^```json\s*/g, '');
-  cleaned = cleaned.replace(/^```\s*/g, '');
+  // Remove markdown code blocks (both at start and anywhere in the string)
+  let cleaned = content.replace(/```json\s*/g, '');
+  cleaned = cleaned.replace(/```javascript\s*/g, '');
+  cleaned = cleaned.replace(/```\s*/g, '');
   cleaned = cleaned.replace(/\s*```$/g, '');
   
   // Check if content is already valid JSON
@@ -37,7 +38,30 @@ function cleanGeminiResponse(content: string): string {
     console.log("Initial JSON parsing failed, attempting to extract valid JSON");
   }
   
-  // Look for multiple objects in the response and try to find the longest valid JSON
+  // First, look for array patterns since many job matches come as arrays
+  const arrayRegex = /(\[[\s\S]*?\])/g;
+  let arrayMatch;
+  const arrayMatches = [];
+  
+  while ((arrayMatch = arrayRegex.exec(cleaned)) !== null) {
+    arrayMatches.push(arrayMatch[1]);
+  }
+  
+  if (arrayMatches.length > 0) {
+    console.log(`Found ${arrayMatches.length} potential JSON arrays in response`);
+    
+    for (const potentialArray of arrayMatches) {
+      try {
+        JSON.parse(potentialArray);
+        console.log("Found valid JSON array");
+        return potentialArray;
+      } catch (e) {
+        // Continue to the next match
+      }
+    }
+  }
+  
+  // Look for object patterns
   const jsonRegex = /(\{[\s\S]*?\})/g;
   let match;
   const matches = [];
@@ -74,13 +98,42 @@ function cleanGeminiResponse(content: string): string {
     cleaned = strictJsonMatch[1];
   }
   
-  // 2. Check for unescaped quotes in string values and try to fix them
-  // (This is a simplistic approach and might not catch all cases)
+  // 2. Try to fix common JSON formatting issues
+  const potentiallyFixedJson = cleaned
+    // Fix missing quotes around property names
+    .replace(/(\s*?{\s*?|\s*?,\s*?)(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '$1"$3":')
+    // Fix single quotes to double quotes
+    .replace(/'/g, '"')
+    // Fix trailing commas in objects and arrays
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*\]/g, ']');
+    
+  try {
+    JSON.parse(potentiallyFixedJson);
+    console.log("Successfully fixed JSON formatting issues");
+    return potentiallyFixedJson;
+  } catch (e) {
+    // Continue with original approach
+  }
+  
+  // 3. Check for unescaped quotes in string values and try to fix them
   cleaned = cleaned.replace(/:\s*"([^"]*?)"/g, (match, p1) => {
     // Escape any unescaped quotes in the string value
     const escaped = p1.replace(/(?<!\\)"/g, '\\"');
     return `: "${escaped}"`;
   });
+  
+  // 4. Last resort - try to wrap the entire object in an array if it looks like a single job object
+  if (cleaned.includes('"title"') && cleaned.includes('"company"')) {
+    try {
+      const wrappedInArray = `[${cleaned}]`;
+      JSON.parse(wrappedInArray);
+      console.log("Successfully parsed as an array item");
+      return wrappedInArray;
+    } catch (e) {
+      // Continue with original cleaned content
+    }
+  }
   
   return cleaned;
 }
@@ -391,22 +444,47 @@ export async function findJobMatchesWithGemini(resumeText: string): Promise<JobM
       // Update the availability flag since we just had a successful call
       isGeminiAvailable = true;
       
-      // Ensure we have the expected structure
-      if (!Array.isArray(jobMatches.jobs)) {
-        console.log("Unexpected Gemini API response format:", content);
-        throw new Error("Unexpected response format from Gemini API");
+      // Check if we have the expected structure with a jobs array
+      if (Array.isArray(jobMatches.jobs)) {
+        // Case 1: Standard format with jobs array
+        return jobMatches.jobs.map((job: any, index: number) => ({
+          id: job.id || `job-${index + 1}`,
+          title: job.title,
+          company: job.company,
+          matchScore: job.matchScore || job.match_score || 0,
+          location: job.location,
+          salary: job.salary,
+          postedDate: job.postedDate || job.posted_date,
+        }));
+      } 
+      // Case 2: The response itself is an array of jobs
+      else if (Array.isArray(jobMatches)) {
+        return jobMatches.map((job: any, index: number) => ({
+          id: job.id || `job-${index + 1}`,
+          title: job.title,
+          company: job.company,
+          matchScore: job.matchScore || job.match_score || 0,
+          location: job.location,
+          salary: job.salary,
+          postedDate: job.postedDate || job.posted_date,
+        }));
+      }
+      // Case 3: A single job object response
+      else if (jobMatches.title && jobMatches.company) {
+        return [{
+          id: jobMatches.id || 'job-1',
+          title: jobMatches.title,
+          company: jobMatches.company,
+          matchScore: jobMatches.matchScore || jobMatches.match_score || 0,
+          location: jobMatches.location,
+          salary: jobMatches.salary,
+          postedDate: jobMatches.postedDate || jobMatches.posted_date,
+        }];
       }
       
-      // Map the response to our JobMatch type
-      return jobMatches.jobs.map((job: any, index: number) => ({
-        id: job.id || `job-${index + 1}`,
-        title: job.title,
-        company: job.company,
-        matchScore: job.matchScore || job.match_score || 0,
-        location: job.location,
-        salary: job.salary,
-        postedDate: job.postedDate || job.posted_date,
-      }));
+      // No valid format found
+      console.log("Unexpected Gemini API response format:", content);
+      throw new Error("Unexpected response format from Gemini API");
     } catch (parseError) {
       console.error("Failed to parse Gemini response as JSON:", parseError);
       console.log("Raw Gemini response:", content);
