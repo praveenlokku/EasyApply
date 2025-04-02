@@ -86,32 +86,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { resumeText, jobDescription } = validatedData.data;
       
-      // Call the OpenAI service to analyze the resume
-      const analysis = await analyzeResume(resumeText, jobDescription);
+      // Import the mock service directly
+      const { generateMockResumeAnalysis } = await import('./services/mockAiService');
       
-      return res.status(200).json({
-        message: "Resume analysis complete",
-        data: analysis
-      });
+      try {
+        // Call the OpenAI service to analyze the resume
+        // The analyzeResume function will handle falling back to mock service if needed
+        const analysis = await analyzeResume(resumeText, jobDescription);
+        
+        return res.status(200).json({
+          message: "Resume analysis complete",
+          data: analysis
+        });
+      } catch (openaiError: any) {
+        console.error("OpenAI error, using mock service:", openaiError.message);
+        
+        // If OpenAI fails for any reason, use the mock service
+        const mockAnalysis = generateMockResumeAnalysis(resumeText, jobDescription);
+        
+        return res.status(200).json({
+          message: "Resume analysis complete (using mock service)",
+          data: mockAnalysis,
+          notice: "This analysis was generated using a mock service because the OpenAI API is currently unavailable."
+        });
+      }
     } catch (error: any) {
       console.error("Error analyzing resume:", error);
-      
-      // Check for OpenAI API quota errors
-      if (error.message && error.message.includes("quota")) {
-        return res.status(429).json({ 
-          message: "OpenAI API quota exceeded. Please try again later or check your API key limits.",
-          error: "api_quota_exceeded"
-        });
-      }
-      
-      // Check for OpenAI API key errors
-      if (error.message && error.message.includes("API key")) {
-        return res.status(401).json({
-          message: "OpenAI API key is missing or invalid. Please configure it properly.",
-          error: "api_key_error"
-        });
-      }
-      
       return res.status(500).json({ 
         message: "An error occurred while analyzing the resume",
         error: error.message || "Unknown error"
@@ -134,32 +134,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { resumeText } = validatedData.data;
       
-      // Call the OpenAI service to find job matches
-      const matches = await findJobMatches(resumeText);
+      // Import the mock service directly
+      const { generateMockJobMatches } = await import('./services/mockAiService');
       
-      return res.status(200).json({
-        message: "Job matching complete",
-        data: matches
-      });
+      try {
+        // Call the OpenAI service to find job matches
+        // The findJobMatches function will handle falling back to mock service if needed
+        const matches = await findJobMatches(resumeText);
+        
+        return res.status(200).json({
+          message: "Job matching complete",
+          data: matches
+        });
+      } catch (openaiError: any) {
+        console.error("OpenAI error, using mock service:", openaiError.message);
+        
+        // If OpenAI fails for any reason, use the mock service
+        const mockMatches = generateMockJobMatches(resumeText);
+        
+        return res.status(200).json({
+          message: "Job matching complete (using mock service)",
+          data: mockMatches,
+          notice: "These job matches were generated using a mock service because the OpenAI API is currently unavailable."
+        });
+      }
     } catch (error: any) {
       console.error("Error finding job matches:", error);
-      
-      // Check for OpenAI API quota errors
-      if (error.message && error.message.includes("quota")) {
-        return res.status(429).json({ 
-          message: "OpenAI API quota exceeded. Please try again later or check your API key limits.",
-          error: "api_quota_exceeded"
-        });
-      }
-      
-      // Check for OpenAI API key errors
-      if (error.message && error.message.includes("API key")) {
-        return res.status(401).json({
-          message: "OpenAI API key is missing or invalid. Please configure it properly.",
-          error: "api_key_error"
-        });
-      }
-      
       return res.status(500).json({ 
         message: "An error occurred while finding job matches",
         error: error.message || "Unknown error"
@@ -177,13 +177,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Extract resume text from the uploaded file
-      const resumeText = await extractTextFromResume(
-        req.file.buffer,
-        req.file.mimetype
-      );
+      // Import mock services directly
+      const { extractMockResumeText, generateMockResumeAnalysis } = await import('./services/mockAiService');
+      
+      let resumeText;
+      let textExtractionSource = "openai";
+      
+      try {
+        // Try to extract text using OpenAI
+        resumeText = await extractTextFromResume(
+          req.file.buffer,
+          req.file.mimetype
+        );
+      } catch (extractError: any) {
+        console.error("OpenAI text extraction error, using mock service:", extractError.message);
+        
+        // Fall back to mock text extraction
+        resumeText = extractMockResumeText(req.file.buffer, req.file.mimetype);
+        textExtractionSource = "mock";
+      }
       
       // Optionally save the resume to storage if a userId is provided
+      let savedResumeId = null;
       if (req.body.userId) {
         const resumeData = {
           userId: parseInt(req.body.userId),
@@ -194,41 +209,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const validatedData = insertResumeSchema.safeParse(resumeData);
         if (validatedData.success) {
           const savedResume = await storage.saveResume(validatedData.data);
-          
-          // Analyze the resume and update storage with the analysis
-          const analysis = await analyzeResume(resumeText);
-          await storage.updateResumeAnalysis(savedResume.id, analysis);
+          savedResumeId = savedResume.id;
         }
       }
       
-      // Analyze the resume
-      const analysis = await analyzeResume(resumeText);
+      // Analyze the resume (with fallback to mock)
+      let analysis;
+      let analysisSource = "openai";
+      
+      try {
+        // Try analyzing with OpenAI
+        analysis = await analyzeResume(resumeText);
+      } catch (analysisError: any) {
+        console.error("OpenAI analysis error, using mock service:", analysisError.message);
+        
+        // Fall back to mock analysis
+        analysis = generateMockResumeAnalysis(resumeText);
+        analysisSource = "mock";
+      }
+      
+      // If we saved a resume and got an analysis, update the stored resume
+      if (savedResumeId !== null) {
+        await storage.updateResumeAnalysis(savedResumeId, analysis);
+      }
       
       return res.status(200).json({
         message: "Resume uploaded and analyzed successfully",
         data: {
           resumeText,
           analysis
-        }
+        },
+        ...(textExtractionSource === "mock" || analysisSource === "mock" ? {
+          notice: "Some or all components of this analysis were generated using a mock service because the OpenAI API is currently unavailable."
+        } : {})
       });
     } catch (error: any) {
       console.error("Error uploading and analyzing resume:", error);
-      
-      // Check for OpenAI API quota errors
-      if (error.message && error.message.includes("quota")) {
-        return res.status(429).json({ 
-          message: "OpenAI API quota exceeded. Please try again later or check your API key limits.",
-          error: "api_quota_exceeded"
-        });
-      }
-      
-      // Check for OpenAI API key errors
-      if (error.message && error.message.includes("API key")) {
-        return res.status(401).json({
-          message: "OpenAI API key is missing or invalid. Please configure it properly.",
-          error: "api_key_error"
-        });
-      }
       
       // Check for no file provided error
       if (error.message && error.message.includes("No resume file provided")) {

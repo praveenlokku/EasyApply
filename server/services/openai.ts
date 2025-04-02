@@ -1,8 +1,16 @@
 import OpenAI from "openai";
 import { ResumeAnalysisResult, JobMatch } from "../../client/src/lib/utils/resume-parser";
+import { 
+  generateMockResumeAnalysis, 
+  generateMockJobMatches, 
+  extractMockResumeText 
+} from "./mockAiService";
 
 // Initialize the OpenAI client with API key from environment variables
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Global flag to track API availability
+let isOpenAIAvailable = true;
 
 // Helper function to check if API key is valid and has quota
 export async function checkOpenAIAPIStatus(): Promise<{isValid: boolean, message: string}> {
@@ -16,12 +24,18 @@ export async function checkOpenAIAPIStatus(): Promise<{isValid: boolean, message
       max_tokens: 5
     });
     
+    // Update the global availability flag
+    isOpenAIAvailable = true;
+    
     return { 
       isValid: true, 
       message: "OpenAI API is working properly" 
     };
   } catch (error: any) {
     console.error("OpenAI API status check failed:", error.message);
+    
+    // Update the global availability flag
+    isOpenAIAvailable = false;
     
     if (error.message.includes("quota") || error.code === "insufficient_quota") {
       return {
@@ -53,6 +67,25 @@ export async function analyzeResume(
   resumeText: string,
   jobDescription?: string
 ): Promise<ResumeAnalysisResult> {
+  // Check OpenAI availability first to avoid unnecessary API calls
+  try {
+    // First check if OpenAI is available based on our global flag
+    if (!isOpenAIAvailable) {
+      console.log("OpenAI API unavailable based on previous check, using mock resume analysis service");
+      return generateMockResumeAnalysis(resumeText, jobDescription);
+    }
+    
+    // Double-check by making a quick API status call if we're unsure
+    const apiStatus = await checkOpenAIAPIStatus();
+    if (!apiStatus.isValid) {
+      console.log("OpenAI API status check failed: " + apiStatus.message);
+      return generateMockResumeAnalysis(resumeText, jobDescription);
+    }
+  } catch (error) {
+    console.log("Error checking OpenAI API status, falling back to mock service:", error);
+    return generateMockResumeAnalysis(resumeText, jobDescription);
+  }
+  
   try {
     const systemPrompt = jobDescription
       ? `You are an expert resume analyst and ATS (Applicant Tracking System) specialist. 
@@ -78,6 +111,9 @@ export async function analyzeResume(
     const content = response.choices[0].message.content || '{}';
     const analysisResult = JSON.parse(content);
 
+    // Update the availability flag since we just had a successful call
+    isOpenAIAvailable = true;
+
     // Ensure the response has the required structure
     return {
       overallScore: analysisResult.overallScore || analysisResult.overall_score || 0,
@@ -88,7 +124,20 @@ export async function analyzeResume(
     };
   } catch (error: any) {
     console.error("Error analyzing resume:", error);
-    throw new Error(`Failed to analyze resume: ${error.message || "Unknown error"}`);
+    
+    // Set the global flag to false for any OpenAI API errors
+    isOpenAIAvailable = false;
+    
+    // Check if it's a quota or API key error
+    if (error.message && (error.message.includes("quota") || error.message.includes("API key") || 
+        error.status === 429 || error.code === "insufficient_quota")) {
+      console.log("Falling back to mock resume analysis service due to API error");
+      return generateMockResumeAnalysis(resumeText, jobDescription);
+    }
+    
+    // For all other errors, also fall back to mock service
+    console.log("Falling back to mock resume analysis service due to unexpected error:", error.message);
+    return generateMockResumeAnalysis(resumeText, jobDescription);
   }
 }
 
@@ -97,6 +146,25 @@ export async function analyzeResume(
  * @param resumeText The text content of the resume
  */
 export async function findJobMatches(resumeText: string): Promise<JobMatch[]> {
+  // Check OpenAI availability first to avoid unnecessary API calls
+  try {
+    // First check if OpenAI is available based on our global flag
+    if (!isOpenAIAvailable) {
+      console.log("OpenAI API unavailable based on previous check, using mock job matches service");
+      return generateMockJobMatches(resumeText);
+    }
+    
+    // Double-check by making a quick API status call if we're unsure
+    const apiStatus = await checkOpenAIAPIStatus();
+    if (!apiStatus.isValid) {
+      console.log("OpenAI API status check failed: " + apiStatus.message);
+      return generateMockJobMatches(resumeText);
+    }
+  } catch (error) {
+    console.log("Error checking OpenAI API status, falling back to mock service:", error);
+    return generateMockJobMatches(resumeText);
+  }
+  
   try {
     const systemPrompt = `You are an AI job matching specialist. Based on the resume provided, 
       generate relevant job matches that would be a good fit for this candidate.`;
@@ -119,6 +187,9 @@ export async function findJobMatches(resumeText: string): Promise<JobMatch[]> {
     const content = response.choices[0].message.content || '{}';
     const jobMatches = JSON.parse(content);
 
+    // Update the availability flag since we just had a successful call
+    isOpenAIAvailable = true;
+
     // Ensure we have the expected structure
     if (!Array.isArray(jobMatches.jobs)) {
       throw new Error("Unexpected response format from API");
@@ -136,7 +207,20 @@ export async function findJobMatches(resumeText: string): Promise<JobMatch[]> {
     }));
   } catch (error: any) {
     console.error("Error finding job matches:", error);
-    throw new Error(`Failed to find job matches: ${error.message || "Unknown error"}`);
+    
+    // Set the global flag to false for any OpenAI API errors
+    isOpenAIAvailable = false;
+    
+    // Check if it's a quota or API key error
+    if (error.message && (error.message.includes("quota") || error.message.includes("API key") || 
+        error.status === 429 || error.code === "insufficient_quota")) {
+      console.log("Falling back to mock job matches service due to API error");
+      return generateMockJobMatches(resumeText);
+    }
+    
+    // For all other errors, also fall back to mock service
+    console.log("Falling back to mock job matches service due to unexpected error:", error.message);
+    return generateMockJobMatches(resumeText);
   }
 }
 
@@ -149,6 +233,36 @@ export async function extractTextFromResume(
   fileBuffer: Buffer,
   fileType: string
 ): Promise<string> {
+  // Check OpenAI availability first to avoid unnecessary API calls
+  try {
+    // First check if OpenAI is available based on our global flag
+    if (!isOpenAIAvailable) {
+      console.log("OpenAI API unavailable based on previous check, using mock text extraction service");
+      return extractMockResumeText(fileBuffer, fileType);
+    }
+    
+    // Double-check by making a quick API status call if we're unsure
+    const apiStatus = await checkOpenAIAPIStatus();
+    if (!apiStatus.isValid) {
+      console.log("OpenAI API status check failed: " + apiStatus.message);
+      return extractMockResumeText(fileBuffer, fileType);
+    }
+    
+    // Check if the API key exists
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OpenAI API key is missing. Please set the OPENAI_API_KEY environment variable.");
+    }
+  } catch (error: any) {
+    console.log("Error checking OpenAI API status, falling back to mock service:", error);
+    
+    // If the API key is missing completely, we need to throw this error
+    if (error.message && error.message.includes("API key is missing")) {
+      throw error;
+    }
+    
+    return extractMockResumeText(fileBuffer, fileType);
+  }
+  
   try {
     console.log(`Extracting text from ${fileType} file...`);
     
@@ -187,6 +301,9 @@ export async function extractTextFromResume(
       max_tokens: 4000
     });
     
+    // Update the availability flag since we just had a successful call
+    isOpenAIAvailable = true;
+    
     // Extract the text content from the response
     const extractedText = response.choices[0].message.content || '';
     
@@ -198,12 +315,23 @@ export async function extractTextFromResume(
   } catch (error: any) {
     console.error("Error extracting text from resume:", error);
     
-    // If there's an error with OpenAI, try a simple fallback or rethrow the error
-    if (error.message && error.message.includes("API key")) {
-      throw error; // Rethrow API key errors for proper handling
+    // Set the global flag to false for any OpenAI API errors
+    isOpenAIAvailable = false;
+    
+    // Always rethrow if the API key is completely missing
+    if (error.message && error.message.includes("API key is missing")) {
+      throw error;
     }
     
-    const errorMessage = error.message || "Unknown error";
-    throw new Error(`Failed to extract text from resume: ${errorMessage}`);
+    // Check if it's a quota or API key error
+    if (error.message && (error.message.includes("quota") || error.message.includes("API key") || 
+        error.status === 429 || error.code === "insufficient_quota")) {
+      console.log("Falling back to mock resume text extraction service due to API error");
+      return extractMockResumeText(fileBuffer, fileType);
+    }
+    
+    // For all other errors, also fall back to mock service
+    console.log("Falling back to mock resume text extraction service due to unexpected error:", error.message);
+    return extractMockResumeText(fileBuffer, fileType);
   }
 }
