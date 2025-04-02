@@ -34,17 +34,14 @@ export default function Header() {
         </div>
         
         <nav className="hidden md:flex items-center space-x-8">
-          <Link href="#home">
-            <a className="text-neutral-600 hover:text-primary font-medium">Home</a>
+          <Link href="/">
+            <span className="text-neutral-600 hover:text-primary font-medium cursor-pointer">Home</span>
           </Link>
-          <Link href="#features">
-            <a className="text-neutral-600 hover:text-primary font-medium">Features</a>
+          <Link href="/resume-analysis">
+            <span className="text-neutral-600 hover:text-primary font-medium cursor-pointer">Resume Analysis</span>
           </Link>
-          <Link href="#how-it-works">
-            <a className="text-neutral-600 hover:text-primary font-medium">How It Works</a>
-          </Link>
-          <Link href="#pricing">
-            <a className="text-neutral-600 hover:text-primary font-medium">Pricing</a>
+          <Link href="/job-dashboard">
+            <span className="text-neutral-600 hover:text-primary font-medium cursor-pointer">Job Dashboard</span>
           </Link>
         </nav>
         
@@ -77,20 +74,17 @@ export default function Header() {
       {/* Mobile menu */}
       <div className={`md:hidden bg-white border-t border-neutral-100 ${isMobileMenuOpen ? 'block' : 'hidden'}`}>
         <div className="px-2 pt-2 pb-3 space-y-1">
-          <Link href="#home">
-            <a className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100">Home</a>
+          <Link href="/">
+            <span className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100 cursor-pointer">Home</span>
           </Link>
-          <Link href="#features">
-            <a className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100">Features</a>
+          <Link href="/resume-analysis">
+            <span className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100 cursor-pointer">Resume Analysis</span>
           </Link>
-          <Link href="#how-it-works">
-            <a className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100">How It Works</a>
-          </Link>
-          <Link href="#pricing">
-            <a className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100">Pricing</a>
+          <Link href="/job-dashboard">
+            <span className="block px-3 py-2 text-neutral-600 font-medium rounded-md hover:bg-neutral-100 cursor-pointer">Job Dashboard</span>
           </Link>
           <Link href="#waitlist">
-            <a className="block px-3 py-2 text-primary font-medium rounded-md hover:bg-neutral-100">Join Waitlist</a>
+            <span className="block px-3 py-2 text-primary font-medium rounded-md hover:bg-neutral-100 cursor-pointer">Join Waitlist</span>
           </Link>
         </div>
       </div>
