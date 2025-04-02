@@ -154,7 +154,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/resume/upload", upload.single("resume"), async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No resume file provided" });
+        console.error("Resume upload failed: No file received in request");
+        return res.status(400).json({ 
+          message: "No resume file provided. Please make sure you've selected a file."
+        });
       }
       
       // Extract resume text from the uploaded file

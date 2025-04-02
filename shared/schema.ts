@@ -96,3 +96,13 @@ export const jobMatchingRequestSchema = z.object({
 });
 
 export type JobMatchingRequest = z.infer<typeof jobMatchingRequestSchema>;
+
+// Resume File Upload Schema (for client-side validation)
+export const resumeFileSchema = z.object({
+  resume: z.any()
+    .refine(val => val && val.length > 0, {
+      message: "Please select a resume file"
+    })
+});
+
+export type ResumeFileUpload = z.infer<typeof resumeFileSchema>;

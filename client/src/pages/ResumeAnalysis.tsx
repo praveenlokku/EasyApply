@@ -44,8 +44,8 @@ const resumeTextSchema = z.object({
 
 const resumeFileSchema = z.object({
   resume: z
-    .instanceof(FileList)
-    .refine((files) => files.length > 0, "Resume file is required"),
+    .any()
+    .refine((files) => files && files.length > 0, "Resume file is required"),
 });
 
 type ResumeTextFormValues = z.infer<typeof resumeTextSchema>;
@@ -169,9 +169,16 @@ export default function ResumeAnalysis() {
   // Mutation for file-based resume analysis
   const uploadResumeMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      console.log("Upload mutation executing with FormData");
+      // Check that FormData contains the resume file
+      if (!data.has("resume")) {
+        console.error("FormData missing resume file when mutation called");
+      }
+      
       return apiRequest<{ data: { resumeText: string, analysis: ResumeAnalysisResult } }>("/api/resume/upload", {
         method: "POST",
         body: data,
+        // Do not set Content-Type header with FormData - browser will set it with boundary
       });
     },
     onSuccess: (response) => {
@@ -231,13 +238,31 @@ export default function ResumeAnalysis() {
 
   // Function to handle file-based form submission
   const onFileSubmit = (data: ResumeFileFormValues) => {
+    console.log("onFileSubmit called with data:", data);
     const formData = new FormData();
-    formData.append("resume", data.resume as unknown as File);
     
-    // Add user ID if available
-    formData.append("userId", CURRENT_USER_ID.toString());
-    
-    uploadResumeMutation.mutate(formData);
+    // Extract file from FileList and append it to FormData
+    if (data.resume && data.resume.length > 0) {
+      const file = data.resume[0];
+      console.log("File to upload:", file.name, file.type, file.size);
+      formData.append("resume", file);
+      
+      // Add user ID if available
+      formData.append("userId", CURRENT_USER_ID.toString());
+      
+      // Debug FormData
+      console.log("FormData created, contains resume:", formData.has("resume"));
+      console.log("FormData contains userId:", formData.has("userId"));
+      
+      uploadResumeMutation.mutate(formData);
+    } else {
+      console.error("No file in form data");
+      toast({
+        title: "No file selected",
+        description: "Please select a resume file to upload",
+        variant: "destructive",
+      });
+    }
   };
 
   // Function to find job matches
@@ -386,6 +411,7 @@ export default function ResumeAnalysis() {
                                   className="hidden"
                                   id="resume-upload"
                                   onChange={(e) => {
+                                    console.log("File selected:", e.target.files);
                                     onChange(e.target.files);
                                   }}
                                   {...field}
