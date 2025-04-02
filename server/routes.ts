@@ -11,6 +11,7 @@ import {
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
 import { analyzeResume, findJobMatches, extractTextFromResume, checkOpenAIAPIStatus } from "./services/openai";
+import { analyzeResumeWithGemini, findJobMatchesWithGemini, extractTextFromResumeWithGemini, checkGeminiAPIStatus } from "./services/gemini";
 
 // Setup multer for file uploads
 const upload = multer({
@@ -21,6 +22,49 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // API endpoint to check all AI services status
+  app.get("/api/status", async (req, res) => {
+    try {
+      // Check both APIs in parallel
+      const [openAIStatus, geminiStatus] = await Promise.all([
+        checkOpenAIAPIStatus().catch(err => {
+          console.error("Error checking OpenAI API:", err);
+          return { isValid: false, message: "OpenAI API error: " + (err.message || "Unknown error") };
+        }),
+        checkGeminiAPIStatus().catch(err => {
+          console.error("Error checking Gemini API:", err);
+          return { isValid: false, message: "Gemini API error: " + (err.message || "Unknown error") };
+        })
+      ]);
+      
+      // Check if at least one service is available
+      const anyServiceAvailable = openAIStatus.isValid || geminiStatus.isValid;
+      
+      return res.status(anyServiceAvailable ? 200 : 503).json({
+        status: anyServiceAvailable ? "active" : "inactive",
+        openai: {
+          status: openAIStatus.isValid ? "active" : "inactive",
+          message: openAIStatus.message
+        },
+        gemini: {
+          status: geminiStatus.isValid ? "active" : "inactive",
+          message: geminiStatus.message
+        },
+        preferredService: openAIStatus.isValid ? "openai" : (geminiStatus.isValid ? "gemini" : "mock"),
+        message: anyServiceAvailable 
+          ? `AI services operational: ${openAIStatus.isValid ? 'OpenAI' : ''}${(openAIStatus.isValid && geminiStatus.isValid) ? ' and ' : ''}${geminiStatus.isValid ? 'Gemini' : ''}`
+          : "All AI services are currently unavailable. Using mock services for demonstrations."
+      });
+    } catch (error: any) {
+      console.error("Error checking AI services status:", error);
+      return res.status(500).json({ 
+        status: "error",
+        message: "Failed to check AI services status",
+        error: error.message || "Unknown error"
+      });
+    }
+  });
+  
   // API endpoint to check OpenAI API status
   app.get("/api/openai/status", async (req, res) => {
     try {
@@ -35,6 +79,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ 
         status: "error",
         message: "Failed to check OpenAI API status"
+      });
+    }
+  });
+  
+  // API endpoint to check Gemini API status
+  app.get("/api/gemini/status", async (req, res) => {
+    try {
+      const apiStatus = await checkGeminiAPIStatus();
+      
+      return res.status(apiStatus.isValid ? 200 : 403).json({
+        status: apiStatus.isValid ? "active" : "inactive",
+        message: apiStatus.message
+      });
+    } catch (error: any) {
+      console.error("Error checking Gemini API status:", error);
+      return res.status(500).json({ 
+        status: "error",
+        message: "Failed to check Gemini API status"
       });
     }
   });
@@ -89,26 +151,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import the mock service directly
       const { generateMockResumeAnalysis } = await import('./services/mockAiService');
       
+      // Determine which AI service to use - try OpenAI first, then Gemini, then mock
+      let analysis;
+      let serviceUsed = "openai";
+      
       try {
-        // Call the OpenAI service to analyze the resume
-        // The analyzeResume function will handle falling back to mock service if needed
-        const analysis = await analyzeResume(resumeText, jobDescription);
+        // First try OpenAI
+        const openAIStatus = await checkOpenAIAPIStatus();
         
+        if (openAIStatus.isValid) {
+          // OpenAI is available, use it
+          analysis = await analyzeResume(resumeText, jobDescription);
+        } else {
+          // OpenAI not available, try Gemini
+          console.log("OpenAI API unavailable, trying Gemini API");
+          const geminiStatus = await checkGeminiAPIStatus();
+          
+          if (geminiStatus.isValid) {
+            // Gemini is available, use it
+            analysis = await analyzeResumeWithGemini(resumeText, jobDescription);
+            serviceUsed = "gemini";
+          } else {
+            // Neither API is available, use mock service
+            console.log("Both OpenAI and Gemini APIs unavailable, using mock service");
+            analysis = generateMockResumeAnalysis(resumeText, jobDescription);
+            serviceUsed = "mock";
+          }
+        }
+        
+        // Return the analysis with the appropriate service information
         return res.status(200).json({
           message: "Resume analysis complete",
-          data: analysis
+          data: analysis,
+          service: serviceUsed,
+          ...(serviceUsed === "mock" ? {
+            notice: "This analysis was generated using a mock service because both OpenAI and Gemini APIs are currently unavailable."
+          } : {})
         });
-      } catch (openaiError: any) {
-        console.error("OpenAI error, using mock service:", openaiError.message);
+      } catch (aiError: any) {
+        console.error(`${serviceUsed.toUpperCase()} error, trying fallback services:`, aiError.message);
         
-        // If OpenAI fails for any reason, use the mock service
-        const mockAnalysis = generateMockResumeAnalysis(resumeText, jobDescription);
-        
-        return res.status(200).json({
-          message: "Resume analysis complete (using mock service)",
-          data: mockAnalysis,
-          notice: "This analysis was generated using a mock service because the OpenAI API is currently unavailable."
-        });
+        // First AI service failed, try alternatives
+        try {
+          if (serviceUsed === "openai") {
+            // Try Gemini as a fallback to OpenAI
+            console.log("Trying Gemini API as fallback");
+            const geminiStatus = await checkGeminiAPIStatus();
+            
+            if (geminiStatus.isValid) {
+              analysis = await analyzeResumeWithGemini(resumeText, jobDescription);
+              serviceUsed = "gemini";
+            } else {
+              // Gemini not available either, use mock
+              analysis = generateMockResumeAnalysis(resumeText, jobDescription);
+              serviceUsed = "mock";
+            }
+          } else {
+            // If we already tried Gemini, fall back to mock
+            analysis = generateMockResumeAnalysis(resumeText, jobDescription);
+            serviceUsed = "mock";
+          }
+          
+          return res.status(200).json({
+            message: "Resume analysis complete",
+            data: analysis,
+            service: serviceUsed,
+            ...(serviceUsed === "mock" ? {
+              notice: "This analysis was generated using a mock service because both OpenAI and Gemini APIs are currently unavailable."
+            } : {})
+          });
+        } catch (fallbackError: any) {
+          // All fallbacks failed, use mock as last resort
+          console.error("All AI services failed, using mock service as last resort:", fallbackError.message);
+          analysis = generateMockResumeAnalysis(resumeText, jobDescription);
+          
+          return res.status(200).json({
+            message: "Resume analysis complete (using mock service)",
+            data: analysis,
+            service: "mock",
+            notice: "This analysis was generated using a mock service because all AI services failed."
+          });
+        }
       }
     } catch (error: any) {
       console.error("Error analyzing resume:", error);
@@ -137,26 +260,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import the mock service directly
       const { generateMockJobMatches } = await import('./services/mockAiService');
       
+      // Determine which AI service to use - try OpenAI first, then Gemini, then mock
+      let matches;
+      let serviceUsed = "openai";
+      
       try {
-        // Call the OpenAI service to find job matches
-        // The findJobMatches function will handle falling back to mock service if needed
-        const matches = await findJobMatches(resumeText);
+        // First try OpenAI
+        const openAIStatus = await checkOpenAIAPIStatus();
         
+        if (openAIStatus.isValid) {
+          // OpenAI is available, use it
+          matches = await findJobMatches(resumeText);
+        } else {
+          // OpenAI not available, try Gemini
+          console.log("OpenAI API unavailable, trying Gemini API");
+          const geminiStatus = await checkGeminiAPIStatus();
+          
+          if (geminiStatus.isValid) {
+            // Gemini is available, use it
+            matches = await findJobMatchesWithGemini(resumeText);
+            serviceUsed = "gemini";
+          } else {
+            // Neither API is available, use mock service
+            console.log("Both OpenAI and Gemini APIs unavailable, using mock service");
+            matches = generateMockJobMatches(resumeText);
+            serviceUsed = "mock";
+          }
+        }
+        
+        // Return the job matches with the appropriate service information
         return res.status(200).json({
           message: "Job matching complete",
-          data: matches
+          data: matches,
+          service: serviceUsed,
+          ...(serviceUsed === "mock" ? {
+            notice: "These job matches were generated using a mock service because both OpenAI and Gemini APIs are currently unavailable."
+          } : {})
         });
-      } catch (openaiError: any) {
-        console.error("OpenAI error, using mock service:", openaiError.message);
+      } catch (aiError: any) {
+        console.error(`${serviceUsed.toUpperCase()} error, trying fallback services:`, aiError.message);
         
-        // If OpenAI fails for any reason, use the mock service
-        const mockMatches = generateMockJobMatches(resumeText);
-        
-        return res.status(200).json({
-          message: "Job matching complete (using mock service)",
-          data: mockMatches,
-          notice: "These job matches were generated using a mock service because the OpenAI API is currently unavailable."
-        });
+        // First AI service failed, try alternatives
+        try {
+          if (serviceUsed === "openai") {
+            // Try Gemini as a fallback to OpenAI
+            console.log("Trying Gemini API as fallback");
+            const geminiStatus = await checkGeminiAPIStatus();
+            
+            if (geminiStatus.isValid) {
+              matches = await findJobMatchesWithGemini(resumeText);
+              serviceUsed = "gemini";
+            } else {
+              // Gemini not available either, use mock
+              matches = generateMockJobMatches(resumeText);
+              serviceUsed = "mock";
+            }
+          } else {
+            // If we already tried Gemini, fall back to mock
+            matches = generateMockJobMatches(resumeText);
+            serviceUsed = "mock";
+          }
+          
+          return res.status(200).json({
+            message: "Job matching complete",
+            data: matches,
+            service: serviceUsed,
+            ...(serviceUsed === "mock" ? {
+              notice: "These job matches were generated using a mock service because both OpenAI and Gemini APIs are currently unavailable."
+            } : {})
+          });
+        } catch (fallbackError: any) {
+          // All fallbacks failed, use mock as last resort
+          console.error("All AI services failed, using mock service as last resort:", fallbackError.message);
+          matches = generateMockJobMatches(resumeText);
+          
+          return res.status(200).json({
+            message: "Job matching complete (using mock service)",
+            data: matches,
+            service: "mock",
+            notice: "These job matches were generated using a mock service because all AI services failed."
+          });
+        }
       }
     } catch (error: any) {
       console.error("Error finding job matches:", error);
@@ -180,19 +364,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import mock services directly
       const { extractMockResumeText, generateMockResumeAnalysis } = await import('./services/mockAiService');
       
+      // Extract text from the resume file, trying OpenAI first, then Gemini, then mock
       let resumeText;
       let textExtractionSource = "openai";
       
       try {
-        // Try to extract text using OpenAI
-        resumeText = await extractTextFromResume(
-          req.file.buffer,
-          req.file.mimetype
-        );
-      } catch (extractError: any) {
-        console.error("OpenAI text extraction error, using mock service:", extractError.message);
+        // First try OpenAI for text extraction
+        const openAIStatus = await checkOpenAIAPIStatus();
         
-        // Fall back to mock text extraction
+        if (openAIStatus.isValid) {
+          // OpenAI is available, use it
+          resumeText = await extractTextFromResume(
+            req.file.buffer,
+            req.file.mimetype
+          );
+        } else {
+          // OpenAI not available, try Gemini (though currently it falls back to mock directly)
+          console.log("OpenAI API unavailable for extraction, trying Gemini API");
+          
+          // Note: Gemini implementation currently falls back to mock as it doesn't support document parsing
+          // But we'll keep the structure for future updates when Gemini adds this functionality
+          resumeText = await extractTextFromResumeWithGemini(
+            req.file.buffer,
+            req.file.mimetype
+          );
+          textExtractionSource = "mock"; // Currently Gemini implementation uses mock
+        }
+      } catch (extractError: any) {
+        console.error("Text extraction error, using mock service:", extractError.message);
+        
+        // Fall back to mock text extraction as last resort
         resumeText = extractMockResumeText(req.file.buffer, req.file.mimetype);
         textExtractionSource = "mock";
       }
@@ -213,19 +414,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Analyze the resume (with fallback to mock)
+      // Analyze the resume, trying OpenAI first, then Gemini, then mock
       let analysis;
       let analysisSource = "openai";
       
       try {
-        // Try analyzing with OpenAI
-        analysis = await analyzeResume(resumeText);
-      } catch (analysisError: any) {
-        console.error("OpenAI analysis error, using mock service:", analysisError.message);
+        // First try OpenAI
+        const openAIStatus = await checkOpenAIAPIStatus();
         
-        // Fall back to mock analysis
-        analysis = generateMockResumeAnalysis(resumeText);
-        analysisSource = "mock";
+        if (openAIStatus.isValid) {
+          // OpenAI is available, use it
+          analysis = await analyzeResume(resumeText);
+        } else {
+          // OpenAI not available, try Gemini
+          console.log("OpenAI API unavailable for analysis, trying Gemini API");
+          const geminiStatus = await checkGeminiAPIStatus();
+          
+          if (geminiStatus.isValid) {
+            // Gemini is available, use it
+            analysis = await analyzeResumeWithGemini(resumeText);
+            analysisSource = "gemini";
+          } else {
+            // Neither API is available, use mock service
+            console.log("Both OpenAI and Gemini APIs unavailable, using mock service for analysis");
+            analysis = generateMockResumeAnalysis(resumeText);
+            analysisSource = "mock";
+          }
+        }
+      } catch (analysisError: any) {
+        console.error("Analysis error, trying fallback services:", analysisError.message);
+        
+        try {
+          if (analysisSource === "openai") {
+            // Try Gemini as a fallback
+            console.log("Trying Gemini API as analysis fallback");
+            const geminiStatus = await checkGeminiAPIStatus();
+            
+            if (geminiStatus.isValid) {
+              analysis = await analyzeResumeWithGemini(resumeText);
+              analysisSource = "gemini";
+            } else {
+              // Gemini not available either, use mock
+              analysis = generateMockResumeAnalysis(resumeText);
+              analysisSource = "mock";
+            }
+          } else {
+            // If we already tried Gemini or otherwise, fall back to mock
+            analysis = generateMockResumeAnalysis(resumeText);
+            analysisSource = "mock";
+          }
+        } catch (fallbackError: any) {
+          // All alternatives failed, use mock as last resort
+          console.error("All AI services failed for analysis, using mock as last resort:", fallbackError.message);
+          analysis = generateMockResumeAnalysis(resumeText);
+          analysisSource = "mock";
+        }
       }
       
       // If we saved a resume and got an analysis, update the stored resume
@@ -233,14 +476,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateResumeAnalysis(savedResumeId, analysis);
       }
       
+      // Determine if we need to include a notice about mock service usage
+      const usedMockService = textExtractionSource === "mock" || analysisSource === "mock";
+      const usedServices = {
+        extraction: textExtractionSource,
+        analysis: analysisSource
+      };
+      
       return res.status(200).json({
         message: "Resume uploaded and analyzed successfully",
         data: {
           resumeText,
           analysis
         },
-        ...(textExtractionSource === "mock" || analysisSource === "mock" ? {
-          notice: "Some or all components of this analysis were generated using a mock service because the OpenAI API is currently unavailable."
+        services: usedServices,
+        ...(usedMockService ? {
+          notice: "Some or all components of this process used a mock service because AI APIs were unavailable."
         } : {})
       });
     } catch (error: any) {

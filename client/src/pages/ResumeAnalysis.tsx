@@ -66,32 +66,44 @@ export default function ResumeAnalysis() {
   const [analysis, setAnalysis] = useState<ResumeAnalysisResult | null>(null);
   const [jobMatches, setJobMatches] = useState<JobMatch[]>([]);
   const [resumeText, setResumeText] = useState("");
-  const [apiStatus, setApiStatus] = useState<"active" | "inactive" | "checking" | "error">("checking");
+  const [aiStatus, setAiStatus] = useState<"active" | "inactive" | "checking" | "error">("checking");
+  const [preferredService, setPreferredService] = useState<"openai" | "gemini" | "mock">("openai");
   
-  // Query to check OpenAI API status
-  const apiStatusQuery = useQuery({
-    queryKey: ["openai-status"],
+  // Query to check AI services status
+  const aiStatusQuery = useQuery({
+    queryKey: ["/api/status"],
     queryFn: async () => {
-      return apiRequest<ApiStatusResponse>("/api/openai/status");
+      try {
+        const response = await fetch('/api/status');
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching AI status:", error);
+        throw error;
+      }
     },
     refetchOnWindowFocus: false,
   });
   
   // Handle API status changes
   useEffect(() => {
-    if (apiStatusQuery.isSuccess) {
-      setApiStatus(apiStatusQuery.data.status);
-      if (apiStatusQuery.data.status === "inactive") {
+    if (aiStatusQuery.isSuccess) {
+      setAiStatus(aiStatusQuery.data.status);
+      setPreferredService(aiStatusQuery.data.preferredService);
+      
+      if (aiStatusQuery.data.status === "inactive") {
         toast({
-          title: "OpenAI API Issue",
-          description: apiStatusQuery.data.message,
+          title: "AI Services Unavailable",
+          description: aiStatusQuery.data.message,
           variant: "destructive",
         });
       }
-    } else if (apiStatusQuery.isError) {
-      setApiStatus("error");
+    } else if (aiStatusQuery.isError) {
+      setAiStatus("error");
     }
-  }, [apiStatusQuery.data, apiStatusQuery.isSuccess, apiStatusQuery.isError, toast]);
+  }, [aiStatusQuery.data, aiStatusQuery.isSuccess, aiStatusQuery.isError, toast]);
 
 // Form for text-based resume analysis
   const textForm = useForm<ResumeTextFormValues>({
@@ -318,30 +330,30 @@ export default function ResumeAnalysis() {
         <div className="container mx-auto px-4 py-8">
           <h1 className="text-3xl font-bold mb-2">Resume Analysis</h1>
           <div className={`border rounded-md p-4 mb-6 ${
-            apiStatus === "active" ? "bg-green-50 border-green-200" : 
-            apiStatus === "inactive" ? "bg-red-50 border-red-200" : 
-            apiStatus === "checking" ? "bg-blue-50 border-blue-200" : 
+            aiStatus === "active" ? "bg-green-50 border-green-200" : 
+            aiStatus === "inactive" ? "bg-red-50 border-red-200" : 
+            aiStatus === "checking" ? "bg-blue-50 border-blue-200" : 
             "bg-yellow-50 border-yellow-200"
           }`}>
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                {apiStatus === "active" && (
+                {aiStatus === "active" && (
                   <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
                   </svg>
                 )}
-                {apiStatus === "inactive" && (
+                {aiStatus === "inactive" && (
                   <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
                   </svg>
                 )}
-                {apiStatus === "checking" && (
+                {aiStatus === "checking" && (
                   <svg className="h-5 w-5 text-blue-500 animate-spin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 )}
-                {apiStatus === "error" && (
+                {aiStatus === "error" && (
                   <svg className="h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                   </svg>
@@ -349,30 +361,36 @@ export default function ResumeAnalysis() {
               </div>
               <div className="ml-3">
                 <h3 className={`text-sm font-medium ${
-                  apiStatus === "active" ? "text-green-800" : 
-                  apiStatus === "inactive" ? "text-red-800" : 
-                  apiStatus === "checking" ? "text-blue-800" : 
+                  aiStatus === "active" ? "text-green-800" : 
+                  aiStatus === "inactive" ? "text-red-800" : 
+                  aiStatus === "checking" ? "text-blue-800" : 
                   "text-yellow-800"
                 }`}>
-                  OpenAI API Status: {apiStatus === "checking" ? "Checking..." : apiStatus.charAt(0).toUpperCase() + apiStatus.slice(1)}
+                  AI Services Status: {aiStatus === "checking" ? "Checking..." : aiStatus.charAt(0).toUpperCase() + aiStatus.slice(1)}
                 </h3>
                 <div className={`mt-1 text-sm ${
-                  apiStatus === "active" ? "text-green-700" : 
-                  apiStatus === "inactive" ? "text-red-700" : 
-                  apiStatus === "checking" ? "text-blue-700" : 
+                  aiStatus === "active" ? "text-green-700" : 
+                  aiStatus === "inactive" ? "text-red-700" : 
+                  aiStatus === "checking" ? "text-blue-700" : 
                   "text-yellow-700"
                 }`}>
-                  {apiStatus === "active" && (
+                  {aiStatus === "active" && preferredService === "openai" && (
                     <p>OpenAI API is working properly. You can use all features of the resume analyzer.</p>
                   )}
-                  {apiStatus === "inactive" && (
-                    <p>The OpenAI API quota has been exceeded. You won't be able to analyze resumes until the quota is reset or a new API key is provided.</p>
+                  {aiStatus === "active" && preferredService === "gemini" && (
+                    <p>Google Gemini API is working properly. Resume analysis will use Gemini's AI capabilities.</p>
                   )}
-                  {apiStatus === "checking" && (
-                    <p>Checking OpenAI API status. Features requiring AI might be limited until status is confirmed.</p>
+                  {aiStatus === "active" && preferredService === "mock" && (
+                    <p>Using fallback services. Resume analysis will use simulated AI capabilities for demonstration.</p>
                   )}
-                  {apiStatus === "error" && (
-                    <p>Could not verify the OpenAI API status. Some features may not work properly.</p>
+                  {aiStatus === "inactive" && (
+                    <p>All AI services are currently unavailable. Resume analysis will use fallback simulated results for demonstration.</p>
+                  )}
+                  {aiStatus === "checking" && (
+                    <p>Checking AI services status. Features requiring AI might be limited until status is confirmed.</p>
+                  )}
+                  {aiStatus === "error" && (
+                    <p>Could not verify AI services status. Some features may not work properly.</p>
                   )}
                 </div>
               </div>
