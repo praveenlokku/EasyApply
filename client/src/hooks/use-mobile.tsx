@@ -1,22 +1,28 @@
-import * as React from "react"
+import { useState, useEffect } from "react";
 
-const MOBILE_BREAKPOINT = 768
-
+/**
+ * Hook that returns true if the screen width is less than 768px (mobile breakpoint)
+ */
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
 
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  return !!isMobile
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener("resize", checkMobile);
+    checkMobile();
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  return isMobile;
 }
 
-// Export as default for compatibility with existing imports
+// Default export for backward compatibility
 export default useIsMobile;

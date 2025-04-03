@@ -6,6 +6,10 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ResumeAnalysis from "@/pages/ResumeAnalysis";
 import JobDashboard from "@/pages/JobDashboard";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import Profile from "@/pages/Profile";
+import Navbar from "@/components/layout/Navbar";
 
 function Router() {
   return (
@@ -13,6 +17,9 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/resume-analysis" component={ResumeAnalysis} />
       <Route path="/job-dashboard" component={JobDashboard} />
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+      <Route path="/profile" component={Profile} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
@@ -22,7 +29,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router />
+      <div className="flex flex-col min-h-screen">
+        <Navbar />
+        <main className="flex-1">
+          <Router />
+        </main>
+      </div>
       <Toaster />
     </QueryClientProvider>
   );

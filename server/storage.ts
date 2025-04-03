@@ -10,7 +10,9 @@ export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  validateUserCredentials(username: string, password: string): Promise<User | null>;
   
   // Waitlist methods
   addToWaitlist(data: InsertWaitlist): Promise<Waitlist>;
@@ -61,12 +63,47 @@ export class MemStorage implements IStorage {
       (user) => user.username === username,
     );
   }
+  
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
+    );
+  }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    // Check if username already exists
+    const existingUsername = await this.getUserByUsername(insertUser.username);
+    if (existingUsername) {
+      throw new Error("Username already exists");
+    }
+    
+    // Check if email already exists
+    const existingEmail = await this.getUserByEmail(insertUser.email);
+    if (existingEmail) {
+      throw new Error("Email already exists");
+    }
+    
     const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
+    const createdAt = new Date();
+    const user: User = { ...insertUser, id, createdAt };
     this.users.set(id, user);
     return user;
+  }
+  
+  async validateUserCredentials(username: string, password: string): Promise<User | null> {
+    const user = await this.getUserByUsername(username);
+    
+    if (!user) {
+      return null;
+    }
+    
+    // In a real application, you would hash the password and compare hashes
+    // For this demo, we're comparing plain text passwords
+    if (user.password === password) {
+      return user;
+    }
+    
+    return null;
   }
 
   // Waitlist methods

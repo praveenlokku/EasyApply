@@ -8,6 +8,7 @@ import {
   insertResumeSchema,
   insertJobDescriptionSchema
 } from "@shared/schema";
+import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
 import { analyzeResume, findJobMatches, extractTextFromResume, checkOpenAIAPIStatus } from "./services/openai";
@@ -22,6 +23,123 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // User authentication endpoints
+  
+  // Register a new user
+  app.post("/api/register", async (req, res) => {
+    try {
+      // Validate request body against the insertUserSchema
+      const { insertUserSchema } = await import("@shared/schema");
+      const validatedData = insertUserSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        const validationError = fromZodError(validatedData.error);
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationError.details 
+        });
+      }
+      
+      // Create user
+      const user = await storage.createUser(validatedData.data);
+      
+      // Return user data without password
+      const { password, ...userData } = user;
+      
+      res.status(201).json(userData);
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      
+      if (error.message.includes("Username already exists") || 
+          error.message.includes("Email already exists")) {
+        return res.status(409).json({ 
+          message: error.message 
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "An error occurred while creating the user",
+        error: error.message || "Unknown error"
+      });
+    }
+  });
+  
+  // Login user
+  app.post("/api/login", async (req, res) => {
+    try {
+      // Basic validation for login
+      const loginSchema = z.object({
+        username: z.string().min(1, "Username is required"),
+        password: z.string().min(1, "Password is required")
+      });
+      
+      const validatedData = loginSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        const validationError = fromZodError(validatedData.error);
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationError.details 
+        });
+      }
+      
+      // Validate credentials
+      const user = await storage.validateUserCredentials(
+        validatedData.data.username, 
+        validatedData.data.password
+      );
+      
+      if (!user) {
+        return res.status(401).json({ 
+          message: "Invalid username or password" 
+        });
+      }
+      
+      // Return user data without password
+      const { password, ...userData } = user;
+      
+      res.json(userData);
+    } catch (error: any) {
+      console.error("Error logging in:", error);
+      res.status(500).json({ 
+        message: "An error occurred during login",
+        error: error.message || "Unknown error"
+      });
+    }
+  });
+  
+  // Get user by ID
+  app.get("/api/user/:id", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ message: "Invalid user ID" });
+      }
+      
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ 
+          message: "User not found" 
+        });
+      }
+      
+      // Return user data without password
+      const { password, ...userData } = user;
+      
+      res.json({
+        data: userData
+      });
+    } catch (error: any) {
+      console.error("Error retrieving user:", error);
+      res.status(500).json({ 
+        message: "An error occurred while retrieving the user",
+        error: error.message || "Unknown error"
+      });
+    }
+  });
+
   // API endpoint to check all AI services status
   app.get("/api/status", async (req, res) => {
     try {
