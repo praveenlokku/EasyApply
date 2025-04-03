@@ -151,29 +151,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import the mock service directly
       const { generateMockResumeAnalysis } = await import('./services/mockAiService');
       
-      // Determine which AI service to use - try OpenAI first, then Gemini, then mock
+      // Determine which AI service to use - try Gemini first, then OpenAI, then mock
       let analysis;
-      let serviceUsed = "openai";
+      let serviceUsed = "gemini";
       
       try {
-        // First try OpenAI
-        const openAIStatus = await checkOpenAIAPIStatus();
+        // First try Gemini
+        const geminiStatus = await checkGeminiAPIStatus();
         
-        if (openAIStatus.isValid) {
-          // OpenAI is available, use it
-          analysis = await analyzeResume(resumeText, jobDescription);
+        if (geminiStatus.isValid) {
+          // Gemini is available, use it
+          analysis = await analyzeResumeWithGemini(resumeText, jobDescription);
         } else {
-          // OpenAI not available, try Gemini
-          console.log("OpenAI API unavailable, trying Gemini API");
-          const geminiStatus = await checkGeminiAPIStatus();
+          // Gemini not available, try OpenAI as fallback
+          console.log("Gemini API unavailable, trying OpenAI API");
+          const openAIStatus = await checkOpenAIAPIStatus();
           
-          if (geminiStatus.isValid) {
-            // Gemini is available, use it
-            analysis = await analyzeResumeWithGemini(resumeText, jobDescription);
-            serviceUsed = "gemini";
+          if (openAIStatus.isValid) {
+            // OpenAI is available, use it
+            analysis = await analyzeResume(resumeText, jobDescription);
+            serviceUsed = "openai";
           } else {
             // Neither API is available, use mock service
-            console.log("Both OpenAI and Gemini APIs unavailable, using mock service");
+            console.log("Both Gemini and OpenAI APIs unavailable, using mock service");
             analysis = generateMockResumeAnalysis(resumeText, jobDescription);
             serviceUsed = "mock";
           }
