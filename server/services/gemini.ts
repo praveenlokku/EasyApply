@@ -261,12 +261,34 @@ export async function analyzeResumeWithGemini(
     });
 
     const systemPrompt = jobDescription
-      ? `You are an expert resume analyst and ATS (Applicant Tracking System) specialist. Analyze the provided resume against the job description. Focus on keyword matches, relevance of experience, and ATS compatibility.`
-      : `You are an expert resume analyst and ATS (Applicant Tracking System) specialist. Analyze the provided resume for overall quality, keyword optimization, and ATS compatibility.`;
+      ? `You are an expert resume analyst with deep expertise in Applicant Tracking Systems (ATS) and recruiting. Your analysis must be specific to the actual content in the resume, not generic advice. Focus on concrete, actionable feedback based on the exact skills, experiences, and formatting in the provided document.`
+      : `You are an expert resume analyst with deep expertise in Applicant Tracking Systems (ATS) and recruiting. Your analysis must be specific to the actual content in the resume, not generic advice. Focus on concrete, actionable feedback based on the exact skills, experiences, and formatting in the provided document.`;
 
     const userPrompt = jobDescription
-      ? `Resume:\n${resumeText}\n\nJob Description:\n${jobDescription}\n\nProvide a comprehensive analysis of the resume's compatibility with the job description. Include an overall match score (0-100), ATS compatibility score (0-100), keyword optimization score (0-100), experience relevance score (0-100), and specific recommendations for improvement. Format your response as a JSON object with the following properties: overallScore, atsCompatibility, keywordOptimization, experienceRelevance, recommendations (as an array of strings).`
-      : `Resume:\n${resumeText}\n\nProvide a comprehensive analysis of this resume. Include an overall score (0-100), ATS compatibility score (0-100), keyword optimization score (0-100), experience relevance score (0-100), and specific recommendations for improvement. Format your response as a JSON object with the following properties: overallScore, atsCompatibility, keywordOptimization, experienceRelevance, recommendations (as an array of strings).`;
+      ? `Resume:\n${resumeText}\n\nJob Description:\n${jobDescription}\n\nProvide a detailed, content-specific analysis of how well this exact resume matches this specific job description. Your analysis must address:
+
+1. Overall match score (0-100): Calculate based on actual skill overlap, experience relevance, and qualification match
+2. ATS compatibility score (0-100): Evaluate based on formatting, keyword usage, and parse-ability
+3. Keyword optimization score (0-100): Assess how well the resume incorporates key terms from the job description
+4. Experience relevance score (0-100): Determine how relevant the candidate's specific experience is to this role
+
+Most importantly, provide 5-7 specific, actionable recommendations for improvement that directly address gaps between this resume and job description. Each recommendation should reference specific content from the resume or job posting.
+
+Format your response as a JSON object with these properties: overallScore, atsCompatibility, keywordOptimization, experienceRelevance, recommendations (as an array of strings).
+
+Ensure each recommendation is specific, actionable, and directly related to the resume content - avoid generic advice.`
+      : `Resume:\n${resumeText}\n\nProvide a detailed, content-specific analysis of this exact resume. Your analysis must address:
+
+1. Overall quality score (0-100): Calculate based on content strength, organization, and impact
+2. ATS compatibility score (0-100): Evaluate based on formatting, keyword usage, and parse-ability 
+3. Keyword optimization score (0-100): Assess how effectively industry/role-relevant keywords are incorporated
+4. Experience relevance score (0-100): Determine how well the experience is presented for their apparent target roles
+
+Most importantly, provide 5-7 specific, actionable recommendations for improvement that address actual issues in this resume. Each recommendation should reference specific content or sections from the resume.
+
+Format your response as a JSON object with these properties: overallScore, atsCompatibility, keywordOptimization, experienceRelevance, recommendations (as an array of strings).
+
+Ensure each recommendation is specific, actionable, and directly related to the resume content - avoid generic advice.`;
 
     // Generate content with Gemini
     const result = await model.generateContent([
@@ -421,9 +443,21 @@ export async function findJobMatchesWithGemini(resumeText: string): Promise<JobM
       ],
     });
 
-    const systemPrompt = `You are an AI job matching specialist. Based on the resume provided, generate relevant job matches that would be a good fit for this candidate.`;
+    const systemPrompt = `You are an AI job matching specialist with expertise in career services and talent acquisition. Your task is to analyze the resume provided in detail and generate highly relevant job matches based specifically on the candidate's actual skills, experience, education, and career trajectory. Focus exclusively on the resume content and avoid generic job suggestions.`;
 
-    const userPrompt = `Resume:\n${resumeText}\n\nGenerate 5 realistic job matches for this candidate based on their skills, experience, and background. For each job, include a job title, company name, match score (0-100), location, salary range, and posted date. Format the response as a JSON object with a 'jobs' array containing objects with the following properties: id, title, company, matchScore, location, salary, postedDate.`;
+    const userPrompt = `Resume:\n${resumeText}\n\nAnalyze this resume in detail and generate 5 highly targeted and realistic job matches based ONLY on the specific skills, experience, and qualifications mentioned in this resume. Do not suggest generic jobs - each match must directly relate to the candidate's actual background.
+
+For each job, provide:
+1. A specific job title that matches their exact experience level (not more senior or more junior)
+2. A realistic company name in an industry relevant to their background
+3. A match score (0-100) based on how well their skills align with the position
+4. A location that makes sense given their work history
+5. A realistic salary range based on their experience level and industry
+6. A recent posted date (within the last 30 days)
+
+Format the response as a JSON object with a 'jobs' array containing objects with these properties: id, title, company, matchScore, location, salary, postedDate.
+
+Be as specific as possible with each job title and company to ensure they are genuinely matched to the candidate's actual skills and experience.`;
 
     // Generate content with Gemini
     const result = await model.generateContent([
