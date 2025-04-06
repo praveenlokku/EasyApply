@@ -11,7 +11,6 @@ import {
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
-import { analyzeResume, findJobMatches, extractTextFromResume, checkOpenAIAPIStatus } from "./services/openai";
 import { analyzeResumeWithGemini, findJobMatchesWithGemini, extractTextFromResumeWithGemini, checkGeminiAPIStatus } from "./services/gemini";
 
 // Setup multer for file uploads
@@ -140,38 +139,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API endpoint to check all AI services status
+  // API endpoint to check AI service status
   app.get("/api/status", async (req, res) => {
     try {
-      // Check both APIs in parallel
-      const [openAIStatus, geminiStatus] = await Promise.all([
-        checkOpenAIAPIStatus().catch(err => {
-          console.error("Error checking OpenAI API:", err);
-          return { isValid: false, message: "OpenAI API error: " + (err.message || "Unknown error") };
-        }),
-        checkGeminiAPIStatus().catch(err => {
-          console.error("Error checking Gemini API:", err);
-          return { isValid: false, message: "Gemini API error: " + (err.message || "Unknown error") };
-        })
-      ]);
+      const geminiStatus = await checkGeminiAPIStatus().catch(err => {
+        console.error("Error checking Gemini API:", err);
+        return { isValid: false, message: "Gemini API error: " + (err.message || "Unknown error") };
+      });
       
-      // Check if at least one service is available
-      const anyServiceAvailable = openAIStatus.isValid || geminiStatus.isValid;
-      
-      return res.status(anyServiceAvailable ? 200 : 503).json({
-        status: anyServiceAvailable ? "active" : "inactive",
-        openai: {
-          status: openAIStatus.isValid ? "active" : "inactive",
-          message: openAIStatus.message
-        },
+      return res.status(geminiStatus.isValid ? 200 : 503).json({
+        status: geminiStatus.isValid ? "active" : "inactive",
         gemini: {
           status: geminiStatus.isValid ? "active" : "inactive",
           message: geminiStatus.message
         },
-        preferredService: openAIStatus.isValid ? "openai" : (geminiStatus.isValid ? "gemini" : "mock"),
-        message: anyServiceAvailable 
-          ? `AI services operational: ${openAIStatus.isValid ? 'OpenAI' : ''}${(openAIStatus.isValid && geminiStatus.isValid) ? ' and ' : ''}${geminiStatus.isValid ? 'Gemini' : ''}`
-          : "All AI services are currently unavailable. Using mock services for demonstrations."
+        preferredService: geminiStatus.isValid ? "gemini" : "mock",
+        message: geminiStatus.isValid 
+          ? "Gemini API is operational"
+          : "Gemini API is currently unavailable. Using mock services for demonstrations."
       });
     } catch (error: any) {
       console.error("Error checking AI services status:", error);
@@ -183,41 +168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // API endpoint to check OpenAI API status
-  app.get("/api/openai/status", async (req, res) => {
-    try {
-      const apiStatus = await checkOpenAIAPIStatus();
-      
-      return res.status(apiStatus.isValid ? 200 : 403).json({
-        status: apiStatus.isValid ? "active" : "inactive",
-        message: apiStatus.message
-      });
-    } catch (error: any) {
-      console.error("Error checking OpenAI API status:", error);
-      return res.status(500).json({ 
-        status: "error",
-        message: "Failed to check OpenAI API status"
-      });
-    }
-  });
   
-  // API endpoint to check Gemini API status
-  app.get("/api/gemini/status", async (req, res) => {
-    try {
-      const apiStatus = await checkGeminiAPIStatus();
-      
-      return res.status(apiStatus.isValid ? 200 : 403).json({
-        status: apiStatus.isValid ? "active" : "inactive",
-        message: apiStatus.message
-      });
-    } catch (error: any) {
-      console.error("Error checking Gemini API status:", error);
-      return res.status(500).json({ 
-        status: "error",
-        message: "Failed to check Gemini API status"
-      });
-    }
-  });
   // API endpoint for adding to waitlist
   app.post("/api/waitlist", async (req, res) => {
     try {
@@ -392,32 +343,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import the mock service directly
       const { generateMockJobMatches } = await import('./services/mockAiService');
       
-      // Determine which AI service to use - try Gemini first, then OpenAI, then mock
+      // Determine which AI service to use - try Gemini first, then mock
       let matches;
       let serviceUsed = "gemini";
       
       try {
-        // First try Gemini
         const geminiStatus = await checkGeminiAPIStatus();
         
         if (geminiStatus.isValid) {
           // Gemini is available, use it
           matches = await findJobMatchesWithGemini(resumeText);
         } else {
-          // Gemini not available, try OpenAI as fallback
-          console.log("Gemini API unavailable, trying OpenAI API");
-          const openAIStatus = await checkOpenAIAPIStatus();
-          
-          if (openAIStatus.isValid) {
-            // OpenAI is available, use it
-            matches = await findJobMatches(resumeText);
-            serviceUsed = "openai";
-          } else {
-            // Neither API is available, use mock service
-            console.log("Both Gemini and OpenAI APIs unavailable, using mock service");
-            matches = generateMockJobMatches(resumeText);
-            serviceUsed = "mock";
-          }
+          // Gemini not available, use mock service
+          console.log("Gemini API unavailable, using mock service");
+          matches = generateMockJobMatches(resumeText);
+          serviceUsed = "mock";
         }
         
         // Return the job matches with the appropriate service information
