@@ -9,7 +9,6 @@ import JobDashboard from "@/pages/JobDashboard";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Profile from "@/pages/Profile";
-import Navbar from "@/components/layout/Navbar";
 
 function Router() {
   return (
@@ -29,11 +28,8 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-1">
-          <Router />
-        </main>
+      <div className="min-h-screen">
+        <Router />
       </div>
       <Toaster />
     </QueryClientProvider>

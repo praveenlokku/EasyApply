@@ -21,7 +21,7 @@ const HeroSection = forwardRef<HTMLElement, {}>((_props, ref) => {
                 </Button>
               </Link>
               <Link href="#how-it-works">
-                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
+                <Button size="lg" variant="outline" className="bg-yellow-400 text-black border-yellow-400 hover:bg-yellow-300 hover:border-yellow-300 ring-4 ring-yellow-400/50 ring-opacity-75 shadow-lg shadow-yellow-400/25 animate-pulse">
                   See How It Works
                 </Button>
               </Link>
@@ -30,10 +30,16 @@ const HeroSection = forwardRef<HTMLElement, {}>((_props, ref) => {
           
           <div className="relative hidden md:block">
             <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 shadow-lg">
-              <div className="rounded-lg w-full bg-neutral-800/40 h-[300px] flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-white/80 mb-2">Dashboard Preview</p>
-                  <p className="text-xs text-white/60">Resume analysis and job matching in one place</p>
+              <div className="rounded-lg w-full bg-neutral-800/40 h-[300px] flex items-center justify-center overflow-hidden">
+                <img 
+                  src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2015&q=80" 
+                  alt="Dashboard Preview" 
+                  className="w-full h-full object-cover rounded-lg opacity-80"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-lg flex items-end justify-center pb-4">
+                  <div className="text-center">
+                    <p className="text-xs text-white/80">Resume analysis and job matching in one place</p>
+                  </div>
                 </div>
               </div>
             </div>
