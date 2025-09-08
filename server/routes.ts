@@ -12,6 +12,7 @@ import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
 import { analyzeResumeWithGemini, findJobMatchesWithGemini, extractTextFromResumeWithGemini, checkGeminiAPIStatus } from "./services/gemini";
+import { analyzeResume, checkOpenAIAPIStatus, findJobMatches, extractTextFromResume } from "./services/openai";
 
 // Setup multer for file uploads
 const upload = multer({
