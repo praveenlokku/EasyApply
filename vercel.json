@@ -1,22 +1,13 @@
 {
   "version": 2,
+  "buildCommand": "npm run vercel-build",
   "builds": [
-    {
-      "src": "dist/index.js",
-      "use": "@vercel/node"
-    }
+    { "src": "api/index.ts", "use": "@vercel/node" },
+    { "src": "dist/public/**", "use": "@vercel/static" }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/dist/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/dist/index.js"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+    { "src": "/api/(.*)", "dest": "/api/index.ts" },
+    { "src": "/(.*)", "dest": "/dist/public/$1" }
+  ]
+  
 }
