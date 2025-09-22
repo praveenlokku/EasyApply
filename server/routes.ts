@@ -207,23 +207,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/resume/analyze", async (req, res) => {
     try {
       const validatedData = resumeAnalysisRequestSchema.safeParse(req.body);
-      
+
       if (!validatedData.success) {
         const validationError = fromZodError(validatedData.error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
+        return res.status(400).json({
+          message: "Validation error",
+          errors: validationError.details
         });
       }
 
       const { resumeText, jobDescription } = validatedData.data;
-      
+
       // Import the mock service directly
       const { generateMockResumeAnalysis } = await import('./services/mockAiService');
-      
+
       // Determine which AI service to use - try Gemini first, then OpenAI, then mock
-      let analysis;
-      let serviceUsed = "gemini";
+      let analysis: any;
+      let serviceUsed: string = "gemini";
       
       try {
         // First try Gemini
@@ -345,8 +345,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { generateMockJobMatches } = await import('./services/mockAiService');
       
       // Determine which AI service to use - try Gemini first, then mock
-      let matches;
-      let serviceUsed = "gemini";
+      let matches: any;
+      let serviceUsed: string = "gemini";
       
       try {
         const geminiStatus = await checkGeminiAPIStatus();
@@ -452,8 +452,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { extractMockResumeText, generateMockResumeAnalysis } = await import('./services/mockAiService');
       
       // Extract text from the resume file, trying Gemini first, then OpenAI, then mock
-      let resumeText;
-      let textExtractionSource = "gemini";
+      let resumeText: string;
+      let textExtractionSource: string = "gemini";
       
       try {
         // First try Gemini for text extraction (although currently falls back to mock)
@@ -511,8 +511,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Analyze the resume, trying Gemini first, then OpenAI, then mock
-      let analysis;
-      let analysisSource = "gemini";
+      let analysis: any;
+      let analysisSource: string = "gemini";
       
       try {
         // First try Gemini
